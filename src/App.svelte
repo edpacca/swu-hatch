@@ -1,22 +1,30 @@
 <script>
-    import { decodeWav, freeWav } from "./decode.js";
+    import { decodeWav } from "./decode.js";
+    import Player from "./Player.svelte";
 
-    let output = $state("");
+    let decodedWav = $state("");
 
     async function handleFile(e) {
         const file = e.target.files[0];
         if (!file) return;
 
         const result = await decodeWav(file);
-        output = `sample rate: ${result.sampleRate}, frames: ${result.frameCount}`;
-        freeWav(result.resultPtr);
+        decodedWav = result;
+        console.log(result);
     }
 </script>
 
 <main>
     <h1>SWU Hatch</h1>
     <input type="file" accept=".wav" onchange={handleFile} />
-    <div>{output}</div>
+
+    {#if decodedWav}
+        <Player
+            sampleRate={decodedWav.sampleRate}
+            frameCount={decodedWav.frameCount}
+            wasmPtr={decodedWav.resultPtr}
+        />
+    {/if}
 </main>
 
 <style>
