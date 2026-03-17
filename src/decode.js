@@ -25,21 +25,28 @@ export async function decodeWav(file) {
     module.HEAPU8.set(wavBytes, dataPtr);
 
     const sampleRatePtr = module._malloc(4);   // uint32_t* out_sample_rate
-    const frameCountPtr = module._malloc(8);   // uint64_t* out_frame_count
+    const frameCountPtr = module._malloc(4);   // uint64_t* out_frame_count
 
     const resultPtr = decodeWav(dataPtr, wavBytes.length, sampleRatePtr, frameCountPtr);
 
     const sampleRate = module.HEAPU32[sampleRatePtr >> 2];
-    const frameCount = module.HEAPU64[frameCountPtr >> 3];
+    const frameCount = module.HEAPU32[frameCountPtr >> 2];
 
     module._free(dataPtr);
     module._free(sampleRatePtr);
     module._free(frameCountPtr);
-
     return { sampleRate, frameCount, resultPtr };
 }
 
 export function freeWav(resultPtr) {
     if (!moduleInstance) return;
     moduleInstance._free_wav(resultPtr);
+}
+
+export async function getWasmSamples (wasmPtr, frameCount) {
+    const module = await getModule();
+    const start = wasmPtr / 4;
+    const end = start + frameCount;
+    const wasmSamples = module.HEAPF32.subarray(start, end);
+    return wasmSamples;
 }
