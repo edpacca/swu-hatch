@@ -2,3 +2,5 @@ node_modules/
 public/
 build/
 wasm-build/
+**/*.wav
+.vscode
