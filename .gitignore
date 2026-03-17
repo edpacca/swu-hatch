@@ -4,3 +4,4 @@ build/
 wasm-build/
 **/*.wav
 .vscode
+dr_lib/
