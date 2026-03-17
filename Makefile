@@ -3,7 +3,7 @@ OUT     = wasm-build/main.js
 SRC     = main.cpp
 
 EXPORTED_FUNCTIONS = '["_decode_wav", "_free_wav", "_malloc", "_free"]'
-EXPORTED_RUNTIME   = '["cwrap", "HEAPU8", "HEAPU32", "HEAPU64"]'
+EXPORTED_RUNTIME   = '["cwrap", "HEAPU8", "HEAPU32", "HEAPF32", "HEAPU64"]'
 
 FLAGS = \
 	-I. \
@@ -22,4 +22,4 @@ $(OUT): $(SRC)
 	$(CC) $(SRC) -o $(OUT) $(FLAGS)
 
 clean:
-	rm -f public/wasm/main.js public/wasm/main.wasm
+	rm -f wasm-build/main.js wasm-build/main.wasm
