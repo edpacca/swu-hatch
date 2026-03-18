@@ -27,7 +27,7 @@ export async function decodeWav(file) {
     const sampleRatePtr = module._malloc(4);   // uint32_t* out_sample_rate
     const frameCountPtr = module._malloc(4);   // uint64_t* out_frame_count
 
-    const resultPtr = decodeWav(dataPtr, wavBytes.length, sampleRatePtr, frameCountPtr);
+    const wasmPtr = decodeWav(dataPtr, wavBytes.length, sampleRatePtr, frameCountPtr);
 
     const sampleRate = module.HEAPU32[sampleRatePtr >> 2];
     const frameCount = module.HEAPU32[frameCountPtr >> 2];
@@ -35,7 +35,7 @@ export async function decodeWav(file) {
     module._free(dataPtr);
     module._free(sampleRatePtr);
     module._free(frameCountPtr);
-    return { sampleRate, frameCount, resultPtr };
+    return { sampleRate, frameCount, wasmPtr };
 }
 
 export function freeWav(resultPtr) {

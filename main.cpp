@@ -22,8 +22,6 @@ extern "C" {
         return samples; // caller must free via free_wav()
     }
 
-
-
     EMSCRIPTEN_KEEPALIVE
     void free_wav(float* ptr) {
         drwav_free(ptr, nullptr);
