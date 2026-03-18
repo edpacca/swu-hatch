@@ -5,8 +5,14 @@ export class Player {
     #sourceNode = null;
     #audioBuffer = null;
     #wasmPtr = null;
+    #isPlaying = false;
 
     onPlayStateChange = null; // (isPlaying: boolean) => void
+
+    #setPlaying(v) {
+        this.#isPlaying = v;
+        this.onPlayStateChange?.(v);
+    }
 
     setupContext() {
         if (this.#ctx && this.#ctx.state !== 'closed') return;
@@ -31,31 +37,47 @@ export class Player {
         buffer.copyToChannel(leftChannel, 0);
         buffer.copyToChannel(rightChannel, 1);
         this.#audioBuffer = buffer;
-        this.onPlayStateChange?.(false);
+        this.#setPlaying(false);
     }
 
     play() {
-        if (!this.#audioBuffer) return;
         const node = this.#ctx.createBufferSource();
         node.buffer = this.#audioBuffer;
         node.connect(this.#ctx.destination);
-        node.onended = () => this.onPlayStateChange?.(false);
+        node.onended = () => this.#setPlaying(false);
         this.#sourceNode = node;
-        if (this.#ctx.state === 'suspended') {
-            this.#ctx.resume().then(() => { node.start(0); this.onPlayStateChange?.(true); });
-        } else {
-            node.start(0);
-            this.onPlayStateChange?.(true);
-        }
+        node.start(0);
+        this.#setPlaying(true);
     }
 
     pause() {
         this.#ctx.suspend();
-        this.onPlayStateChange?.(false);
+        this.#setPlaying(false);
     }
 
     resume() {
+        this.#ctx.resume().then(() => this.#setPlaying(true));
+    }
+
+    toggle() {
+        if (!this.#audioBuffer) return;
+        if (this.#isPlaying) {
+            this.pause();
+        } else if (this.#ctx.state === 'suspended') {
+            this.resume();
+        } else {
+            this.play();
+        }
+    }
+
+    stop() {
+        if (this.#sourceNode) {
+            this.#sourceNode.stop();
+            this.#sourceNode.disconnect();
+            this.#sourceNode = null;
+        }
         if (this.#ctx.state === 'suspended') this.#ctx.resume();
+        this.#setPlaying(false);
     }
 
     destroy() {
