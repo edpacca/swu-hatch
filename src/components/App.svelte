@@ -36,7 +36,7 @@
         height: calc(100vh - 16px);
         width: 100%;
         align-items: center;
-        background-color: darkblue;
+        background-color: rgb(25, 25, 44);
         color: lightblue;
         font-family: sans-serif;
     }

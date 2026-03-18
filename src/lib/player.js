@@ -2,12 +2,29 @@ import { freeWav, getWasmSamples } from './decode.js';
 
 export class Player {
     #ctx = null;
+    #analyser = null;
     #sourceNode = null;
     #audioBuffer = null;
     #wasmPtr = null;
     #isPlaying = false;
+    #startTime = 0;
 
     onPlayStateChange = null; // (isPlaying: boolean) => void
+    onBufferLoaded    = null; // (audioBuffer: AudioBuffer) => void
+
+    get currentTime() {
+        if (this.#isPlaying) return this.#ctx.currentTime - this.#startTime;
+        if (this.#ctx?.state === 'suspended') return this.#ctx.currentTime - this.#startTime;
+        return 0;
+    }
+
+    get audioBuffer() {
+        return this.#audioBuffer;
+    }
+
+    get analyser() {
+        return this.#analyser;
+    }
 
     #setPlaying(v) {
         this.#isPlaying = v;
@@ -17,6 +34,8 @@ export class Player {
     setupContext() {
         if (this.#ctx && this.#ctx.state !== 'closed') return;
         this.#ctx = new AudioContext();
+        this.#analyser = this.#ctx.createAnalyser();
+        this.#analyser.connect(this.#ctx.destination);
     }
 
     async loadBuffer({ sampleRate, frameCount, wasmPtr }) {
@@ -36,16 +55,19 @@ export class Player {
         }
         buffer.copyToChannel(leftChannel, 0);
         buffer.copyToChannel(rightChannel, 1);
+
         this.#audioBuffer = buffer;
+        this.onBufferLoaded?.(buffer);
         this.#setPlaying(false);
     }
 
     play() {
         const node = this.#ctx.createBufferSource();
         node.buffer = this.#audioBuffer;
-        node.connect(this.#ctx.destination);
+        node.connect(this.#analyser);
         node.onended = () => this.#setPlaying(false);
         this.#sourceNode = node;
+        this.#startTime = this.#ctx.currentTime;
         node.start(0);
         this.#setPlaying(true);
     }
