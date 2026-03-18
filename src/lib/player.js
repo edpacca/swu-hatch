@@ -35,6 +35,8 @@ export class Player {
         if (this.#ctx && this.#ctx.state !== 'closed') return;
         this.#ctx = new AudioContext();
         this.#analyser = this.#ctx.createAnalyser();
+        this.#analyser.fftSize = 2048;
+        this.#analyser.smoothingTimeConstant = 0.8;
         this.#analyser.connect(this.#ctx.destination);
     }
 
