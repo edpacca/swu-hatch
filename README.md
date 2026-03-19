@@ -3,8 +3,10 @@
 
 _open the hatch and listen carefully_
 
-A mini project designed to help learning C++ and WASM.
-The idea is to be able to load and play back audio via the browser, with tools to scrub, pause, play, reverse, change speed etc.
+A mini project designed to help learn about digital audio processing, and WASM.
+The idea is to be able to load and play back audio via the browser, with tools to scrub, pause, play, filter etc.
+
+![SWU-hatch main view](./static/swuhatch-screenshot.png)
 
 ---
 
