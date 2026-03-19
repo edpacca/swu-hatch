@@ -1,9 +1,10 @@
 <script lang="ts">
     import PlaybackControls from './PlaybackControls.svelte';
-    import Waveform         from './Waveform.svelte';
-    import Visualiser       from './Visualiser.svelte';
-    import DspControls      from './DspControls.svelte';
-    import type { Player }  from '../lib/player.js';
+    import SpectrumVisualiser     from './SpectrumVisualiser.svelte';
+    import OscilloscopeVisualiser from './OscilloscopeVisualiser.svelte';
+    import type { Player }  from '../lib/player.ts';
+    import Waveform from './Waveform.svelte';
+    import DspControls from './DspControls.svelte';
 
     interface Props {
         player:     Player;
@@ -32,10 +33,9 @@
     <div>duration: {(frameCount / sampleRate).toFixed(2)}s</div>
 </div>
 
+<SpectrumVisualiser {player} {isPlaying} />
 <Waveform {audioBuffer} {player} {isPlaying} />
-<Visualiser {player} {isPlaying} />
-<div>
-    <PlaybackControls {player} {isPlaying} />
-    <DspControls {player} />
-</div>
+<OscilloscopeVisualiser {player} {isPlaying} />
+<PlaybackControls {player} {isPlaying} />
+<DspControls {player} />
 

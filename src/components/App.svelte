@@ -1,7 +1,7 @@
 <script lang="ts">
     import { decodeWav } from "../lib/decode.js";
     import type { DecodeResult } from "../lib/decode.js";
-    import { Player } from "../lib/player.js";
+    import { Player } from "../lib/player.ts";
     import PlayerComponent from "./Player.svelte";
 
     const player = new Player();

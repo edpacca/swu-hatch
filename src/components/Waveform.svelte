@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { Player } from '../lib/player.js';
+    import type { Player } from '../lib/player.ts';
 
     interface Bar {
         yTop:      number;
