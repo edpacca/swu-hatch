@@ -150,6 +150,12 @@ export class Player {
         }
     }
 
+    setRate(value: number): void {
+        if (this.#sourceNode) {
+            this.#sourceNode.playbackRate.value = value;
+        }
+    }
+
     destroy(): void {
         if (this.#sourceNode) this.#sourceNode.disconnect();
         if (this.#wasmPtr !== null) { freeWav(this.#wasmPtr); this.#wasmPtr = null; }

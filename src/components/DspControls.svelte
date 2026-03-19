@@ -9,6 +9,7 @@
 
     let gain   = $state(1.0);
     let cutoff = $state(1.0);
+    let rate   = $state(1.0);
     let bypass = $state(false);
 
     function handleGain(e: Event) {
@@ -21,6 +22,11 @@
         player.setCutoff(cutoff);
     }
 
+    function handleRate(e: Event) {
+        rate = parseFloat((e.target as HTMLInputElement).value);
+        player.setRate(rate);
+    }
+
     function toggleBypass() {
         bypass = !bypass;
         player.setBypass(bypass);
@@ -31,6 +37,12 @@
     <label>
         <span>Gain <em>{gain.toFixed(2)}</em></span>
         <input type="range" min="0" max="2" step="0.01" value={gain} oninput={handleGain} />
+    </label>
+
+    <label>
+        <span>Rate <em>{rate.toFixed(2)}</em></span>
+        <input type="range" min="0" max="5" step="0.01" value={rate} oninput={handleRate} />
+        <button title="reset-rate" onclick={() => { player.setRate(1.0); rate = 1.0;}}>reset</button>
     </label>
 
     <label>
