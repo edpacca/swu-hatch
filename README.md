@@ -59,7 +59,7 @@ npm install
 make
 ```
 
-This compiles `audio.cpp` to `wasm-build/main.js` and `wasm-build/main.wasm` using Emscripten.
+This compiles cpp to wasm using Emscripten.
 
 ### 2. Start the development server
 
@@ -71,7 +71,7 @@ npm run dev
 
 ## Development Workflow
 
-- **Modify C++ code**: Edit `audio.cpp`, then run `make` to rebuild
+- **Modify C++ code**: Edit c++ code, then run `make` to rebuild
 - **Modify JS/HTML**: Changes hot-reload automatically via Vite
 - **Clean build artifacts**: `make clean` removes `wasm-build/`
 
