@@ -2,7 +2,7 @@ let moduleInstance = null;
 
 async function getModule() {
     if (!moduleInstance) {
-        const { default: ModuleFactory } = await import('@wasm/main.js');
+        const { default: ModuleFactory } = await import('@wasm/decode.js');
         moduleInstance = await ModuleFactory();
     }
     return moduleInstance;
