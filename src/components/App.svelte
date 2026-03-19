@@ -1,13 +1,14 @@
-<script>
+<script lang="ts">
     import { decodeWav } from "../lib/decode.js";
+    import type { DecodeResult } from "../lib/decode.js";
     import { Player } from "../lib/player.js";
     import PlayerComponent from "./Player.svelte";
 
     const player = new Player();
-    let decoded = $state(null);
+    let decoded = $state<DecodeResult | null>(null);
 
-    async function handleFile(e) {
-        const file = e.target.files[0];
+    async function handleFile(e: Event) {
+        const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
         const decodeResult = await decodeWav(file);
         await player.setupContext();

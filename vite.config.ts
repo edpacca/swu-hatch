@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
-import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
     plugins: [svelte()],
@@ -9,7 +12,7 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            '@wasm': path.resolve(__dirname, 'wasm-build')
+            '@wasm': resolve(__dirname, 'wasm-build')
         }
     },
     assetsInclude: ['**/*.wasm']

@@ -1,40 +1,41 @@
 import { freeWav, getWasmSamples } from './decode.js';
+import type { DecodeResult } from './decode.js';
 import dspWasmUrl from '@wasm/dsp.wasm?url';
 
 export class Player {
-    #ctx = null;
-    #analyser = null;
-    #workletNode = null;
-    #sourceNode = null;
-    #audioBuffer = null;
-    #wasmPtr = null;
-    #isPlaying = false;
-    #startTime = 0;
-    #bypass = false;
+    #ctx: AudioContext | null = null;
+    #analyser: AnalyserNode | null = null;
+    #workletNode: AudioWorkletNode | null = null;
+    #sourceNode: AudioBufferSourceNode | null = null;
+    #audioBuffer: AudioBuffer | null = null;
+    #wasmPtr: number | null = null;
+    #isPlaying: boolean = false;
+    #startTime: number = 0;
+    #bypass: boolean = false;
 
-    onPlayStateChange = null; // (isPlaying: boolean) => void
-    onBufferLoaded    = null; // (audioBuffer: AudioBuffer) => void
+    onPlayStateChange: ((isPlaying: boolean) => void) | null = null;
+    onBufferLoaded: ((audioBuffer: AudioBuffer) => void) | null = null;
 
-    get currentTime() {
-        if (this.#isPlaying) return this.#ctx.currentTime - this.#startTime;
+    get currentTime(): number {
+        if (this.#isPlaying) return this.#ctx!.currentTime - this.#startTime;
         if (this.#ctx?.state === 'suspended') return this.#ctx.currentTime - this.#startTime;
         return 0;
     }
 
-    get audioBuffer() {
+    get audioBuffer(): AudioBuffer | null {
         return this.#audioBuffer;
     }
 
-    get analyser() {
+    get analyser(): AnalyserNode | null {
         return this.#analyser;
     }
 
-    #setPlaying(v) {
+    #setPlaying(v: boolean): void {
         this.#isPlaying = v;
         this.onPlayStateChange?.(v);
     }
 
-    async setupContext() {
+    async setupContext(): Promise<void> {
         if (this.#ctx && this.#ctx.state !== 'closed') return;
         this.#ctx = new AudioContext();
 
@@ -44,7 +45,7 @@ export class Player {
         this.#analyser.connect(this.#ctx.destination);
 
         await this.#ctx.audioWorklet.addModule(
-            new URL('./dsp-processor.js', import.meta.url)
+            new URL('./dsp-processor.ts', import.meta.url)
         );
 
         const wasmBytes = await fetch(dspWasmUrl).then(r => r.arrayBuffer());
@@ -60,13 +61,13 @@ export class Player {
         this.#workletNode.port.postMessage({ type: 'init', wasmBytes }, [wasmBytes]);
     }
 
-    async loadBuffer({ sampleRate, frameCount, wasmPtr }) {
+    async loadBuffer({ sampleRate, frameCount, wasmPtr }: DecodeResult): Promise<void> {
         if (this.#sourceNode) this.#sourceNode.disconnect();
         if (this.#wasmPtr !== null) { freeWav(this.#wasmPtr); this.#wasmPtr = null; }
 
         this.#wasmPtr = wasmPtr;
 
-        const buffer = this.#ctx.createBuffer(2, frameCount, sampleRate);
+        const buffer = this.#ctx!.createBuffer(2, frameCount, sampleRate);
         const wasmSamples = await getWasmSamples(wasmPtr, frameCount * 2);
 
         const leftChannel  = new Float32Array(frameCount);
@@ -83,73 +84,73 @@ export class Player {
         this.#setPlaying(false);
     }
 
-    play() {
-        const node = this.#ctx.createBufferSource();
+    play(): void {
+        const node = this.#ctx!.createBufferSource();
         node.buffer = this.#audioBuffer;
         node.onended = () => this.#setPlaying(false);
 
-        node.connect(this.#bypass ? this.#analyser : this.#workletNode);
+        node.connect(this.#bypass ? this.#analyser! : this.#workletNode!);
 
         this.#sourceNode = node;
-        this.#startTime  = this.#ctx.currentTime;
+        this.#startTime  = this.#ctx!.currentTime;
         node.start(0);
         this.#setPlaying(true);
     }
 
-    pause() {
-        this.#ctx.suspend();
+    pause(): void {
+        this.#ctx!.suspend();
         this.#setPlaying(false);
     }
 
-    resume() {
-        this.#ctx.resume().then(() => this.#setPlaying(true));
+    resume(): void {
+        this.#ctx!.resume().then(() => this.#setPlaying(true));
     }
 
-    toggle() {
+    toggle(): void {
         if (!this.#audioBuffer) return;
         if (this.#isPlaying) {
             this.pause();
-        } else if (this.#ctx.state === 'suspended') {
+        } else if (this.#ctx!.state === 'suspended') {
             this.resume();
         } else {
             this.play();
         }
     }
 
-    stop() {
+    stop(): void {
         if (this.#sourceNode) {
             this.#sourceNode.stop();
             this.#sourceNode.disconnect();
             this.#sourceNode = null;
         }
-        if (this.#ctx.state === 'suspended') this.#ctx.resume();
+        if (this.#ctx!.state === 'suspended') this.#ctx!.resume();
         this.#setPlaying(false);
     }
 
-    setGain(value) {
+    setGain(value: number): void {
         this.#workletNode?.port.postMessage({ type: 'set_gain', value });
     }
 
-    setCutoff(value) {
+    setCutoff(value: number): void {
         this.#workletNode?.port.postMessage({ type: 'set_cutoff', value });
     }
 
     // Bypass routes audio directly to the analyser, skipping the WASM DSP.
     // If audio is currently playing, rewires the source node immediately.
-    setBypass(bypassed) {
+    setBypass(bypassed: boolean): void {
         this.#bypass = bypassed;
         if (!this.#sourceNode) return;
 
         if (bypassed) {
-            this.#sourceNode.disconnect(this.#workletNode);
-            this.#sourceNode.connect(this.#analyser);
+            this.#sourceNode.disconnect(this.#workletNode!);
+            this.#sourceNode.connect(this.#analyser!);
         } else {
-            this.#sourceNode.disconnect(this.#analyser);
-            this.#sourceNode.connect(this.#workletNode);
+            this.#sourceNode.disconnect(this.#analyser!);
+            this.#sourceNode.connect(this.#workletNode!);
         }
     }
 
-    destroy() {
+    destroy(): void {
         if (this.#sourceNode) this.#sourceNode.disconnect();
         if (this.#wasmPtr !== null) { freeWav(this.#wasmPtr); this.#wasmPtr = null; }
     }

@@ -1,8 +1,21 @@
-<script>
-    let { audioBuffer, player, isPlaying } = $props();
+<script lang="ts">
+    import type { Player } from '../lib/player.js';
 
-    let canvas = $state();
-    let bars = [];
+    interface Bar {
+        yTop:      number;
+        barHeight: number;
+    }
+
+    interface Props {
+        audioBuffer: AudioBuffer | null;
+        player:      Player;
+        isPlaying:   boolean;
+    }
+
+    let { audioBuffer, player, isPlaying }: Props = $props();
+
+    let canvas = $state<HTMLCanvasElement | undefined>();
+    let bars: Bar[] = [];
 
     const WIDTH  = 600;
     const HEIGHT = 100;
@@ -22,11 +35,16 @@
             return;
         }
 
-        let rafId;
+        // Capture non-null values for use inside the loop closure
+        if (!audioBuffer) return;
+        const activeCanvas = canvas;
+        const activeBuffer = audioBuffer;
+
+        let rafId: number;
 
         function loop() {
-            const progress = player.currentTime / audioBuffer.duration;
-            drawWaveform(canvas, bars, progress);
+            const progress = player.currentTime / activeBuffer.duration;
+            drawWaveform(activeCanvas, bars, progress);
             rafId = requestAnimationFrame(loop);
         }
 
@@ -34,7 +52,7 @@
         return () => cancelAnimationFrame(rafId);
     });
 
-    function computeBars(buffer, width, height) {
+    function computeBars(buffer: AudioBuffer, width: number, height: number): Bar[] {
         const data = buffer.getChannelData(0);
         const samplesPerPixel = Math.ceil(data.length / width);
         const mid = height / 2;
@@ -53,8 +71,9 @@
         });
     }
 
-    function drawWaveform(canvas, bars, progress) {
+    function drawWaveform(canvas: HTMLCanvasElement, bars: Bar[], progress: number): void {
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         const playheadX = Math.floor(progress * canvas.width);
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);

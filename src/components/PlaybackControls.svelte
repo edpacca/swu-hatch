@@ -1,5 +1,12 @@
-<script>
-    let { player, isPlaying } = $props();
+<script lang="ts">
+    import type { Player } from '../lib/player.js';
+
+    interface Props {
+        player:    Player;
+        isPlaying: boolean;
+    }
+
+    let { player, isPlaying }: Props = $props();
 </script>
 
 <div class="controls__container">

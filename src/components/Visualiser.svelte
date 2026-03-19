@@ -1,5 +1,12 @@
-<script>
-    let { player, isPlaying } = $props();
+<script lang="ts">
+    import type { Player } from '../lib/player.js';
+
+    interface Props {
+        player:    Player;
+        isPlaying: boolean;
+    }
+
+    let { player, isPlaying }: Props = $props();
 
     const WIDTH        = 600;
     const BAR_AREA     = 80;
@@ -18,7 +25,7 @@
         { freq: 20000, label: '20k' },
     ];
 
-    let canvas = $state();
+    let canvas = $state<HTMLCanvasElement | undefined>();
 
     $effect(() => {
         if (!canvas || !isPlaying) {
@@ -26,16 +33,18 @@
             return;
         }
 
-        const analyser   = player.analyser;
+        const analyser = player.analyser;
+        if (!analyser) return;
+
         const sampleRate = analyser.context.sampleRate;
         const binCount   = analyser.frequencyBinCount; // 1024
         const dataArray  = new Uint8Array(binCount);
         const binsPerBar = Math.floor(binCount / BAR_COUNT);
 
-        let rafId;
+        let rafId: number;
 
         function loop() {
-            analyser.getByteFrequencyData(dataArray);
+            analyser?.getByteFrequencyData(dataArray);
             drawBars(dataArray, binsPerBar);
             drawScale(sampleRate);
             rafId = requestAnimationFrame(loop);
@@ -48,6 +57,7 @@
     function drawIdle() {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
         if (player.analyser) {
@@ -55,8 +65,10 @@
         }
     }
 
-    function drawBars(dataArray, binsPerBar) {
+    function drawBars(dataArray: Uint8Array, binsPerBar: number) {
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
+        if (!ctx) return;
         ctx.clearRect(0, 0, WIDTH, HEIGHT);
 
         for (let i = 0; i < BAR_COUNT; i++) {
@@ -77,8 +89,10 @@
         ctx.globalAlpha = 1;
     }
 
-    function drawScale(sampleRate) {
+    function drawScale(sampleRate: number) {
+        if (!canvas) return;
         const ctx     = canvas.getContext('2d');
+        if (!ctx) return;
         const nyquist = sampleRate / 2;
 
         ctx.fillStyle = 'rgba(150, 200, 220, 0.6)';

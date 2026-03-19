@@ -1,17 +1,23 @@
-<script>
-    let { player } = $props();
+<script lang="ts">
+    import type { Player } from '../lib/player.js';
+
+    interface Props {
+        player: Player;
+    }
+
+    let { player }: Props = $props();
 
     let gain   = $state(1.0);
     let cutoff = $state(1.0);
     let bypass = $state(false);
 
-    function handleGain(e) {
-        gain = parseFloat(e.target.value);
+    function handleGain(e: Event) {
+        gain = parseFloat((e.target as HTMLInputElement).value);
         player.setGain(gain);
     }
 
-    function handleCutoff(e) {
-        cutoff = parseFloat(e.target.value);
+    function handleCutoff(e: Event) {
+        cutoff = parseFloat((e.target as HTMLInputElement).value);
         player.setCutoff(cutoff);
     }
 
