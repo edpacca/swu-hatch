@@ -1,7 +1,8 @@
 <script>
-    import Controls   from './Controls.svelte';
-    import Waveform   from './Waveform.svelte';
-    import Visualiser from './Visualiser.svelte';
+    import PlaybackControls    from './PlaybackControls.svelte';
+    import Waveform    from './Waveform.svelte';
+    import Visualiser  from './Visualiser.svelte';
+    import DspControls from './DspControls.svelte';
 
     let { player, sampleRate, frameCount } = $props();
 
@@ -26,4 +27,8 @@
 
 <Waveform {audioBuffer} {player} {isPlaying} />
 <Visualiser {player} {isPlaying} />
-<Controls {player} {isPlaying} />
+<div>
+    <PlaybackControls {player} {isPlaying} />
+    <DspControls {player} />
+</div>
+

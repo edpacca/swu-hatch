@@ -10,7 +10,7 @@
         const file = e.target.files[0];
         if (!file) return;
         const decodeResult = await decodeWav(file);
-        player.setupContext();
+        await player.setupContext();
         await player.loadBuffer(decodeResult);
         decoded = decodeResult;
     }
