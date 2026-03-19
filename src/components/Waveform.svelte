@@ -14,7 +14,8 @@
 
     let { audioBuffer, player, isPlaying }: Props = $props();
 
-    let canvas = $state<HTMLCanvasElement | undefined>();
+    let canvas      = $state<HTMLCanvasElement | undefined>();
+    let isScrubbing = $state(false);
     let bars: Bar[] = [];
 
     const WIDTH  = 600;
@@ -29,13 +30,13 @@
     $effect(() => {
         if (!canvas || !bars.length) return;
 
-        if (!isPlaying) {
+        // Run the RAF loop when playing or scrubbing so the playhead tracks in both cases
+        if (!isPlaying && !isScrubbing) {
             const progress = audioBuffer ? player.currentTime / audioBuffer.duration : 0;
             drawWaveform(canvas, bars, progress);
             return;
         }
 
-        // Capture non-null values for use inside the loop closure
         if (!audioBuffer) return;
         const activeCanvas = canvas;
         const activeBuffer = audioBuffer;
@@ -44,13 +45,35 @@
 
         function loop() {
             const progress = player.currentTime / activeBuffer.duration;
-            drawWaveform(activeCanvas, bars, progress);
+            drawWaveform(activeCanvas, bars, Math.max(0, Math.min(1, progress)));
             rafId = requestAnimationFrame(loop);
         }
 
         rafId = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(rafId);
     });
+
+    // ── Scrub pointer events ─────────────────────────────────────────────────────
+
+    function onPointerDown(e: PointerEvent) {
+        if (!canvas) return;
+        canvas.setPointerCapture(e.pointerId); // keep events coming even if pointer leaves canvas
+        isScrubbing = true;
+        player.scrubStart(e.clientX);
+    }
+
+    function onPointerMove(e: PointerEvent) {
+        if (!isScrubbing) return;
+        player.scrubMove(e.clientX);
+    }
+
+    function onPointerUp(_e: PointerEvent) {
+        if (!isScrubbing) return;
+        isScrubbing = false;
+        player.scrubEnd();
+    }
+
+    // ── Waveform drawing ─────────────────────────────────────────────────────────
 
     function computeBars(buffer: AudioBuffer, width: number, height: number): Bar[] {
         const data = buffer.getChannelData(0);
@@ -85,4 +108,13 @@
     }
 </script>
 
-<canvas bind:this={canvas} width={WIDTH} height={HEIGHT}></canvas>
+<canvas
+    bind:this={canvas}
+    width={WIDTH}
+    height={HEIGHT}
+    style="cursor: {isScrubbing ? 'grabbing' : 'ew-resize'}"
+    onpointerdown={onPointerDown}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+></canvas>

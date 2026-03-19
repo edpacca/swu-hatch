@@ -3,23 +3,33 @@ import type { DecodeResult } from './decode.js';
 import dspWasmUrl from '@wasm/dsp.wasm?url';
 
 export class Player {
-    #ctx: AudioContext | null = null;
-    #analyser: AnalyserNode | null = null;
-    #workletNode: AudioWorkletNode | null = null;
-    #sourceNode: AudioBufferSourceNode | null = null;
-    #audioBuffer: AudioBuffer | null = null;
-    #wasmPtr: number | null = null;
-    #isPlaying: boolean = false;
-    #startTime: number = 0;
-    #bypass: boolean = false;
+    #ctx:           AudioContext      | null = null;
+    #analyser:      AnalyserNode      | null = null;
+    #workletNode:   AudioWorkletNode  | null = null;  // DSP (WASM effects)
+    #playbackNode:  AudioWorkletNode  | null = null;  // audio source
+    #audioBuffer:   AudioBuffer       | null = null;
+    #wasmPtr:       number            | null = null;
+
+    #isPlaying:     boolean = false;
+    #bypass:        boolean = false;
+    #currentSample: number  = 0;
+    #frameCount:    number  = 0;
+    #sampleRate:    number  = 0;
+    #lastManualRate: number = 1.0;  // restored after scrub ends
+
+    // Scrub displacement tracking
+    #scrubActive: boolean = false;
+    #scrubStartX: number  = 0;   // pointer X at the moment scrubbing began
+
+    // Pixels of displacement that map to a 1× playback rate.
+    // Smaller = more sensitive; 100 means ±100 px = ±1× speed.
+    static readonly #PIXELS_PER_UNIT = 100;
 
     onPlayStateChange: ((isPlaying: boolean) => void) | null = null;
-    onBufferLoaded: ((audioBuffer: AudioBuffer) => void) | null = null;
+    onBufferLoaded:    ((audioBuffer: AudioBuffer) => void) | null = null;
 
     get currentTime(): number {
-        if (this.#isPlaying) return this.#ctx!.currentTime - this.#startTime;
-        if (this.#ctx?.state === 'suspended') return this.#ctx.currentTime - this.#startTime;
-        return 0;
+        return this.#sampleRate > 0 ? this.#currentSample / this.#sampleRate : 0;
     }
 
     get audioBuffer(): AudioBuffer | null {
@@ -44,88 +54,115 @@ export class Player {
         this.#analyser.smoothingTimeConstant = 0.8;
         this.#analyser.connect(this.#ctx.destination);
 
+        // Register both worklet processors before creating any nodes
+        await this.#ctx.audioWorklet.addModule(
+            new URL('./playback-processor.ts', import.meta.url)
+        );
         await this.#ctx.audioWorklet.addModule(
             new URL('./dsp-processor.ts', import.meta.url)
         );
 
-        const wasmBytes = await fetch(dspWasmUrl).then(r => r.arrayBuffer());
+        // Playback node — generates audio, no inputs
+        this.#playbackNode = new AudioWorkletNode(this.#ctx, 'playback-processor', {
+            numberOfInputs:     0,
+            numberOfOutputs:    1,
+            outputChannelCount: [2],
+        });
 
+        // DSP node — applies WASM effects
+        const wasmBytes = await fetch(dspWasmUrl).then(r => r.arrayBuffer());
         this.#workletNode = new AudioWorkletNode(this.#ctx, 'dsp-processor', {
             numberOfInputs:     1,
             numberOfOutputs:    1,
             outputChannelCount: [2],
         });
+        this.#workletNode.port.postMessage({ type: 'init', wasmBytes }, [wasmBytes]);
+
+        // Graph: playbackNode → dspWorklet → analyser → destination
+        this.#playbackNode.connect(this.#workletNode);
         this.#workletNode.connect(this.#analyser);
 
-        // Transfer bytes (zero-copy) — worklet instantiates WASM from these
-        this.#workletNode.port.postMessage({ type: 'init', wasmBytes }, [wasmBytes]);
+        // Handle position and track-end notifications from the playback worklet
+        this.#playbackNode.port.onmessage = ({ data }: MessageEvent) => {
+            if (data.type === 'position') {
+                this.#currentSample = data.sample as number;
+            }
+            if (data.type === 'ended') {
+                this.#currentSample = 0;
+                this.#setPlaying(false);
+            }
+        };
     }
 
     async loadBuffer({ sampleRate, frameCount, wasmPtr }: DecodeResult): Promise<void> {
-        if (this.#sourceNode) this.#sourceNode.disconnect();
         if (this.#wasmPtr !== null) { freeWav(this.#wasmPtr); this.#wasmPtr = null; }
 
-        this.#wasmPtr = wasmPtr;
+        this.#wasmPtr    = wasmPtr;
+        this.#frameCount = frameCount;
+        this.#sampleRate = sampleRate;
+        this.#currentSample = 0;
 
-        const buffer = this.#ctx!.createBuffer(2, frameCount, sampleRate);
         const wasmSamples = await getWasmSamples(wasmPtr, frameCount * 2);
 
+        // Deinterleave into planar channels
         const leftChannel  = new Float32Array(frameCount);
         const rightChannel = new Float32Array(frameCount);
         for (let i = 0; i < frameCount; i++) {
             leftChannel[i]  = wasmSamples[i * 2];
             rightChannel[i] = wasmSamples[i * 2 + 1];
         }
-        buffer.copyToChannel(leftChannel, 0);
-        buffer.copyToChannel(rightChannel, 1);
 
+        // Build the AudioBuffer for Waveform visualisation (copyToChannel reads the
+        // arrays without consuming them, so they remain valid for the transfer below)
+        const buffer = this.#ctx!.createBuffer(2, frameCount, sampleRate);
+        buffer.copyToChannel(leftChannel,  0);
+        buffer.copyToChannel(rightChannel, 1);
         this.#audioBuffer = buffer;
+
+        // Transfer the raw PCM to the playback worklet (zero-copy).
+        // leftChannel / rightChannel are detached after this call.
+        this.#playbackNode!.port.postMessage(
+            { type: 'load', channels: [leftChannel.buffer, rightChannel.buffer], frameCount },
+            [leftChannel.buffer, rightChannel.buffer]
+        );
+
         this.onBufferLoaded?.(buffer);
         this.#setPlaying(false);
     }
 
+    // ── Playback controls ────────────────────────────────────────────────────────
+
     play(): void {
-        const node = this.#ctx!.createBufferSource();
-        node.buffer = this.#audioBuffer;
-        node.onended = () => this.#setPlaying(false);
-
-        node.connect(this.#bypass ? this.#analyser! : this.#workletNode!);
-
-        this.#sourceNode = node;
-        this.#startTime  = this.#ctx!.currentTime;
-        node.start(0);
+        this.#playbackNode!.port.postMessage({ type: 'play', position: this.#currentSample });
         this.#setPlaying(true);
     }
 
     pause(): void {
-        this.#ctx!.suspend();
+        // Pause via worklet message — the AudioContext stays running so the
+        // analyser and oscilloscope remain alive.
+        this.#playbackNode!.port.postMessage({ type: 'pause' });
         this.#setPlaying(false);
     }
 
     resume(): void {
-        this.#ctx!.resume().then(() => this.#setPlaying(true));
-    }
-
-    toggle(): void {
-        if (!this.#audioBuffer) return;
-        if (this.#isPlaying) {
-            this.pause();
-        } else if (this.#ctx!.state === 'suspended') {
-            this.resume();
-        } else {
-            this.play();
-        }
+        this.#playbackNode!.port.postMessage({ type: 'play', position: this.#currentSample });
+        this.#setPlaying(true);
     }
 
     stop(): void {
-        if (this.#sourceNode) {
-            this.#sourceNode.stop();
-            this.#sourceNode.disconnect();
-            this.#sourceNode = null;
-        }
-        if (this.#ctx!.state === 'suspended') this.#ctx!.resume();
+        this.#playbackNode!.port.postMessage({ type: 'stop' });
+        this.#currentSample = 0;
         this.#setPlaying(false);
     }
+
+    async toggle(): Promise<void> {
+        if (!this.#frameCount) return;
+        if (this.#ctx!.state === 'suspended') await this.#ctx!.resume();
+        if (this.#isPlaying) this.pause();
+        else this.resume();
+    }
+
+    // ── DSP controls ─────────────────────────────────────────────────────────────
 
     setGain(value: number): void {
         this.#workletNode?.port.postMessage({ type: 'set_gain', value });
@@ -135,29 +172,64 @@ export class Player {
         this.#workletNode?.port.postMessage({ type: 'set_cutoff', value });
     }
 
-    // Bypass routes audio directly to the analyser, skipping the WASM DSP.
-    // If audio is currently playing, rewires the source node immediately.
+    setRate(value: number): void {
+        this.#lastManualRate = value;
+        this.#playbackNode?.port.postMessage({ type: 'set_rate', rate: value });
+    }
+
     setBypass(bypassed: boolean): void {
         this.#bypass = bypassed;
-        if (!this.#sourceNode) return;
+        if (!this.#playbackNode) return;
 
         if (bypassed) {
-            this.#sourceNode.disconnect(this.#workletNode!);
-            this.#sourceNode.connect(this.#analyser!);
+            this.#playbackNode.disconnect(this.#workletNode!);
+            this.#playbackNode.connect(this.#analyser!);
         } else {
-            this.#sourceNode.disconnect(this.#analyser!);
-            this.#sourceNode.connect(this.#workletNode!);
+            this.#playbackNode.disconnect(this.#analyser!);
+            this.#playbackNode.connect(this.#workletNode!);
         }
     }
 
-    setRate(value: number): void {
-        if (this.#sourceNode) {
-            this.#sourceNode.playbackRate.value = value;
+    // ── Scrub API ────────────────────────────────────────────────────────────────
+
+    scrubStart(initialX: number): void {
+        this.#scrubActive = true;
+        this.#scrubStartX = initialX;
+        // Begin at rate 0 — pointer at the click point means frozen
+        this.#playbackNode?.port.postMessage({ type: 'scrub', rate: 0 });
+        if (!this.#isPlaying) {
+            this.#playbackNode?.port.postMessage({ type: 'play', position: this.#currentSample });
         }
     }
+
+    scrubMove(pointerX: number): void {
+        if (!this.#scrubActive) return;
+
+        // Displacement from the click origin determines rate.
+        // Holding the pointer still = rate 0 (frozen).
+        // Moving ±PIXELS_PER_UNIT pixels = ±1× speed.
+        const displacement = pointerX - this.#scrubStartX;
+        const rate = displacement / Player.#PIXELS_PER_UNIT;
+        this.#playbackNode?.port.postMessage({ type: 'scrub', rate: Math.max(-8, Math.min(8, rate)) });
+    }
+
+    scrubEnd(): void {
+        this.#scrubActive = false;
+
+        if (this.#isPlaying) {
+            // Resume normal playback at the user's last manual rate from current position
+            this.#playbackNode?.port.postMessage({ type: 'set_rate', rate: this.#lastManualRate });
+            this.#playbackNode?.port.postMessage({ type: 'play', position: this.#currentSample });
+        } else {
+            // Was paused before scrub — silence the output again
+            this.#playbackNode?.port.postMessage({ type: 'pause' });
+        }
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────────
 
     destroy(): void {
-        if (this.#sourceNode) this.#sourceNode.disconnect();
+        this.#playbackNode?.disconnect();
         if (this.#wasmPtr !== null) { freeWav(this.#wasmPtr); this.#wasmPtr = null; }
     }
 }

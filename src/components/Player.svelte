@@ -16,7 +16,7 @@
     let isPlaying   = $state(false);
     let audioBuffer = $derived(player.audioBuffer);
 
-    const duration = (frameCount / sampleRate).toFixed(2);
+    const duration = $derived((frameCount / sampleRate).toFixed(2));
 
     $effect(() => {
         player.onPlayStateChange = (v: boolean)     => { isPlaying   = v; };
