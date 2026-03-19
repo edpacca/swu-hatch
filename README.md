@@ -69,11 +69,3 @@ This compiles cpp to wasm using Emscripten.
 npm run dev
 ```
 
----
-
-## Development Workflow
-
-- **Modify C++ code**: Edit c++ code, then run `make` to rebuild
-- **Modify JS/HTML**: Changes hot-reload automatically via Vite
-- **Clean build artifacts**: `make clean` removes `wasm-build/`
-
